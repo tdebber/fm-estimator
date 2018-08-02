@@ -12,22 +12,22 @@ public class Vehicle {
    protected EnergyFunction energyFunction;
    protected OptionalDouble remainingEnergy;
    protected double timestep;
-   protected double distancePerTimestep;
+   protected WindProvider windProvider;
 
    public Vehicle(List<Point> route, double initialBatteryEnergy,
                   double cruiseSpeed, EnergyFunction energyFunction,
-                  double timestep) {
+                  double timestep, WindProvider windProvider) {
        this.route = route;
        this.initialBatteryEnergy = initialBatteryEnergy;
        this.cruiseSpeed = cruiseSpeed;
        this.energyFunction = energyFunction;
        this.timestep = timestep;
+       this.windProvider = windProvider;
 
        remainingEnergy = OptionalDouble.empty();
-       distancePerTimestep = cruiseSpeed * timestep;
    }
 
-   public double getRemainingEnergy() {
+   public double getRemainingEnergy() throws WindException {
        if (remainingEnergy.isPresent()) {
            return remainingEnergy.getAsDouble();
        }
@@ -46,19 +46,36 @@ public class Vehicle {
        return remainingEnergy.getAsDouble();
    }
 
-    private double timeToWaypoint(Point currentWaypoint, Point nextWaypoint) {
+    private double timeToWaypoint(Point currentWaypoint, Point nextWaypoint) throws WindException {
        double bearingToNextDegrees = currentWaypoint.compassBearingTo(nextWaypoint);
        Point currentPosition = currentWaypoint;
-       double remainingDistance = currentPosition.distanceTo(nextWaypoint);
+       double totalDistance = currentPosition.distanceTo(nextWaypoint);
+       double accumulatedDistance = 0;
        double time = 0;
-       for ( ;
-            remainingDistance > distancePerTimestep;
-            remainingDistance -= distancePerTimestep) {
-            currentPosition = currentPosition.plusDistanceToward(nextWaypoint, distancePerTimestep);
-            time += timestep;
-            System.out.println("Remaining distance: " + remainingDistance);
+       while (accumulatedDistance < totalDistance) {
+           // add wind vector from velocity vector to get groundspeed
+           Velocity windAtPosition = new Velocity(0,0);
+           if (windProvider != null) {
+               windAtPosition = windProvider.getWind(currentPosition);
+           }
+           Velocity vehicleAirVelocity = new Velocity(cruiseSpeed, bearingToNextDegrees);
+           Velocity groundVelocity = vehicleAirVelocity.add(windAtPosition);
+           double groundSpeed = groundVelocity.getSpeedMetersPerSecond();
+           if (groundSpeed <= 0) {
+               throw new WindException("Wind speed exceeds vehicle cruise speed.");
+           }
+           double distanceThisTimestep = groundSpeed * timestep;
+           double remainingDistance = totalDistance - accumulatedDistance;
+           if (distanceThisTimestep > remainingDistance) {
+               double remainingTime = remainingDistance / groundSpeed;
+               time += remainingTime;
+               break;
+           } else {
+               currentPosition = currentPosition.plusDistanceToward(nextWaypoint, distanceThisTimestep);
+               accumulatedDistance += distanceThisTimestep;
+               time += timestep;
+           }
        }
-       time += remainingDistance / cruiseSpeed;
        return time;
     }
 

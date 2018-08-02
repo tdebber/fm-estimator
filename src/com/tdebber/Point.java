@@ -16,17 +16,9 @@ public final class Point {
         return Math.sqrt((xDiff * xDiff) + (yDiff * yDiff));
     }
 
-    private static double deg2rad(double deg) {
-        return (deg * Math.PI / 180.0);
-    }
-
-    private static double rad2deg(double rad) {
-        return (rad * 180 / Math.PI);
-    }
-
     public double compassBearingTo(Point pt2) {
         double thetaRad = bearingInRad(pt2);
-        double thetaDeg = rad2deg(thetaRad);
+        double thetaDeg = Math.toDegrees(thetaRad);
         if (thetaDeg > 90) {
             return 450 - thetaDeg;
         }
@@ -44,6 +36,14 @@ public final class Point {
         double diffX = distance * Math.cos(bearingRad);
         double diffY = distance * Math.sin(bearingRad);
         return new Point(x + diffX, y + diffY);
+    }
+
+    public double getX() {
+        return x;
+    }
+
+    public double getY() {
+        return y;
     }
 }
 
